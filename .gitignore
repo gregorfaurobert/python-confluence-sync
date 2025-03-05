@@ -40,3 +40,4 @@ ENV/
 
 # Local test files
 test_data/ 
+obsidian-test/
