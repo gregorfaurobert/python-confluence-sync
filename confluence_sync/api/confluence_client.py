@@ -483,39 +483,40 @@ class ConfluenceClient:
 
         Args:
             page_id (str): The ID of the page to update.
-            title (str): The new title of the page.
-            body (str): The new body content of the page (in storage format).
-            parent_id (str, optional): The ID of the parent page.
+            title (str): The new title for the page.
+            body (str): The new body content for the page.
+            parent_id (str, optional): The ID of the parent page. If None, keeps existing parent.
 
         Returns:
-            dict: Updated page information, or None if error.
+            dict: Updated page data if successful, None if failed.
         """
         if not self.authenticated:
             logger.error("Not authenticated. Please initialize the client with valid credentials.")
             return None
         
         try:
-            # Get current page info to get the version number
+            # Get the current page to get the current version
             current_page = self.get_page_by_id(page_id)
             if not current_page:
-                logger.error(f"Could not retrieve current page info for {page_id}")
+                logger.error(f"Could not retrieve page with ID {page_id} for update")
                 return None
             
             # Update the page
-            page = self.client.update_page(
+            updated_page = self.client.update_page(
                 page_id=page_id,
                 title=title,
                 body=body,
                 parent_id=parent_id,
                 type='page',
-                representation='storage'
+                representation='storage',
+                minor_edit=False
             )
             
-            logger.info(f"Updated page '{title}' (ID: {page_id})")
-            return page
+            logger.info(f"Updated page: {title} (ID: {page_id})")
+            return updated_page
             
         except Exception as e:
-            logger.error(f"Error updating page '{title}' (ID: {page_id}): {str(e)}")
+            logger.error(f"Error updating page {page_id}: {str(e)}")
             return None
     
     def download_attachments_from_page(self, page_id, download_dir):
@@ -546,27 +547,23 @@ class ConfluenceClient:
             # Dictionary to store attachment info
             attachment_info = {}
             
-            # Download each attachment
-            with Progress() as progress:
-                task = progress.add_task(f"[cyan]Downloading attachments...", total=len(attachments))
+            # Download each attachment without using a new Progress instance
+            # to avoid conflicts with any parent Progress instances
+            for attachment in attachments:
+                attachment_id = attachment.get('id')
+                filename = attachment.get('title')
                 
-                for attachment in attachments:
-                    attachment_id = attachment.get('id')
-                    filename = attachment.get('title')
+                if attachment_id and filename:
+                    download_path = os.path.join(download_dir, filename)
+                    success = self.download_attachment_without_progress(page_id, attachment_id, filename, download_path)
                     
-                    if attachment_id and filename:
-                        download_path = os.path.join(download_dir, filename)
-                        success = self.download_attachment(page_id, attachment_id, filename, download_path)
-                        
-                        if success:
-                            # Store the attachment info
-                            attachment_info[filename] = {
-                                'id': attachment_id,
-                                'path': download_path,
-                                'relative_path': os.path.relpath(download_path, download_dir)
-                            }
-                    
-                    progress.update(task, advance=1)
+                    if success:
+                        # Store the attachment info
+                        attachment_info[filename] = {
+                            'id': attachment_id,
+                            'path': download_path,
+                            'relative_path': os.path.relpath(download_path, download_dir)
+                        }
             
             logger.info(f"Downloaded {len(attachment_info)} attachments to {download_dir}")
             return attachment_info
@@ -574,7 +571,76 @@ class ConfluenceClient:
         except Exception as e:
             logger.error(f"Error downloading attachments from page {page_id}: {str(e)}")
             return None
+    
+    def download_attachment_without_progress(self, page_id, attachment_id, filename, download_path):
+        """
+        Download a specific attachment without using a progress bar.
+
+        Args:
+            page_id (str): The ID of the page the attachment belongs to.
+            attachment_id (str): The ID of the attachment to download.
+            filename (str): The filename of the attachment.
+            download_path (str): The path to save the attachment to.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return False
+        
+        try:
+            # Ensure the download directory exists
+            os.makedirs(os.path.dirname(download_path), exist_ok=True)
             
+            # Get the download URL from the attachment info
+            attachments = self.client.get_attachments_from_content(page_id)
+            attachment = None
+            for att in attachments.get('results', []):
+                if att.get('id') == attachment_id:
+                    attachment = att
+                    break
+            
+            if not attachment:
+                logger.error(f"Attachment with ID {attachment_id} not found on page {page_id}")
+                return False
+            
+            # Get the download link
+            download_link = attachment.get('_links', {}).get('download')
+            if not download_link:
+                logger.error(f"Download link not found for attachment {filename}")
+                return False
+            
+            # Construct the correct download URL
+            # Confluence Cloud URLs need /wiki appended
+            base_url = self.credentials.get('url')
+            if not base_url.endswith('/wiki'):
+                base_url = base_url + '/wiki'
+            download_url = base_url + download_link
+            
+            # Use requests to download the file without progress bar
+            response = requests.get(
+                download_url,
+                auth=(self.credentials.get('email'), self.credentials.get('api_token')),
+                stream=True
+            )
+            
+            if response.status_code == 200:
+                with open(download_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                logger.info(f"Downloaded attachment '{filename}' to {download_path}")
+                return True
+            else:
+                logger.error(f"Error downloading attachment '{filename}': HTTP {response.status_code}")
+                return False
+        
+        except Exception as e:
+            logger.error(f"Error downloading attachment '{filename}': {str(e)}")
+            return False
+    
     def upload_attachments_to_page(self, page_id, file_paths):
         """
         Upload multiple attachments to a page.
@@ -628,6 +694,311 @@ class ConfluenceClient:
         except Exception as e:
             logger.error(f"Error uploading attachments to page {page_id}: {str(e)}")
             return None
+    
+    # ===== Folder API Methods (using REST API v2) =====
+    
+    def get_folders_in_space(self, space_id):
+        """
+        Get all folders in a Confluence space.
+        
+        This method counts the number of folders in a space by looking for pages
+        that have a parent of type 'folder'.
+        
+        Args:
+            space_id (str): The ID or key of the space to retrieve folders from.
+            
+        Returns:
+            list: List of folders, or empty list if none found or error.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return []
+        
+        try:
+            # First, get the space to ensure it exists and to get the space key
+            space = self.get_space(space_id)
+            if not space:
+                logger.error(f"Could not retrieve space with ID/key {space_id}")
+                return []
+            
+            space_key = space['key']
+            logger.info(f"Retrieving folders from space {space_key}")
+            
+            # Use the CQL search to find pages in the space
+            api_url = urljoin(self.credentials['url'], f"/rest/api/content/search")
+            
+            # Set up parameters for CQL search
+            params = {
+                'cql': f'space="{space_key}" AND type=page',
+                'expand': 'ancestors,container',
+                'limit': 100
+            }
+            
+            # Set up authentication
+            auth = (self.credentials['email'], self.credentials['api_token'])
+            
+            # Set up headers
+            headers = {
+                'Accept': 'application/json'
+            }
+            
+            # Make the API request
+            response = requests.get(api_url, params=params, headers=headers, auth=auth)
+            response.raise_for_status()
+            
+            # Parse the response
+            data = response.json()
+            all_pages = data.get('results', [])
+            
+            # Dictionary to store unique folders
+            folders_dict = {}
+            
+            # For each page, check if it has a folder in its ancestors or container
+            for page in all_pages:
+                # Check ancestors for folders
+                ancestors = page.get('ancestors', [])
+                for ancestor in ancestors:
+                    if ancestor.get('type') == 'folder':
+                        folder_id = ancestor.get('id')
+                        if folder_id and folder_id not in folders_dict:
+                            folders_dict[folder_id] = ancestor
+                
+                # Check if the container is a folder
+                container = page.get('container', {})
+                if container.get('type') == 'folder':
+                    folder_id = container.get('id')
+                    if folder_id and folder_id not in folders_dict:
+                        folders_dict[folder_id] = container
+            
+            # Convert the dictionary to a list
+            folders = list(folders_dict.values())
+            
+            logger.info(f"Retrieved {len(folders)} folders from space {space_key}")
+            return folders
+            
+        except Exception as e:
+            logger.error(f"Error retrieving folders from space {space_id}: {str(e)}")
+            return []
+    
+    def _is_folder(self, content):
+        """
+        Helper method to determine if a content item is a folder.
+        
+        Args:
+            content (dict): The content item to check.
+            
+        Returns:
+            bool: True if the content is a folder, False otherwise.
+        """
+        # Check if the content has a "type" property with value "folder"
+        if content.get('type') == 'folder':
+            return True
+        
+        # Check if the content has metadata indicating it's a folder
+        metadata = content.get('metadata', {})
+        if metadata.get('mediaType') == 'folder' or metadata.get('contentType') == 'folder':
+            return True
+        
+        # Check if the content has properties indicating it's a folder
+        properties = content.get('properties', {})
+        if properties.get('isFolder') == True or properties.get('content-type') == 'folder':
+            return True
+        
+        # Check if the content has a specific label that might indicate it's a folder
+        labels = content.get('labels', [])
+        for label in labels:
+            if label.get('name') == 'folder':
+                return True
+        
+        # Check the title for common folder indicators
+        title = content.get('title', '').lower()
+        if title == 'folder' or title.endswith(' folder'):
+            return True
+        
+        return False
+    
+    def get_folder_by_id(self, folder_id):
+        """
+        Get a specific folder by ID using REST API v2.
+        
+        Args:
+            folder_id (str): The ID of the folder to retrieve.
+            
+        Returns:
+            dict: Folder data if successful, None if failed.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return None
+        
+        try:
+            # Construct the API URL for getting a folder by ID
+            api_url = urljoin(self.credentials['url'], f"/wiki/api/v2/folders/{folder_id}")
+            
+            # Set up authentication
+            auth = (self.credentials['email'], self.credentials['api_token'])
+            
+            # Set up headers
+            headers = {
+                'Accept': 'application/json'
+            }
+            
+            # Make the API request
+            response = requests.get(api_url, headers=headers, auth=auth)
+            response.raise_for_status()
+            
+            # Parse the response
+            folder = response.json()
+            
+            logger.info(f"Retrieved folder: {folder.get('title', 'Unknown')} (ID: {folder_id})")
+            return folder
+            
+        except Exception as e:
+            logger.error(f"Error retrieving folder {folder_id}: {str(e)}")
+            return None
+    
+    def create_folder(self, space_id, title, parent_id=None):
+        """
+        Create a new folder in Confluence using REST API v2.
+        
+        Args:
+            space_id (str): The ID of the space to create the folder in.
+            title (str): The title for the new folder.
+            parent_id (str, optional): The ID of the parent page or folder.
+            
+        Returns:
+            dict: Created folder data if successful, None if failed.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return None
+        
+        try:
+            # Construct the API URL for creating a folder
+            api_url = urljoin(self.credentials['url'], "/wiki/api/v2/folders")
+            
+            # Set up the request body
+            body = {
+                "spaceId": space_id,
+                "title": title
+            }
+            
+            # Add parent ID if provided
+            if parent_id:
+                body["parentId"] = parent_id
+            
+            # Set up authentication
+            auth = (self.credentials['email'], self.credentials['api_token'])
+            
+            # Set up headers
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            
+            # Make the API request
+            response = requests.post(api_url, json=body, headers=headers, auth=auth)
+            response.raise_for_status()
+            
+            # Parse the response
+            created_folder = response.json()
+            
+            logger.info(f"Created folder: {title} (ID: {created_folder.get('id', 'Unknown')})")
+            return created_folder
+            
+        except Exception as e:
+            logger.error(f"Error creating folder {title}: {str(e)}")
+            return None
+    
+    def delete_folder(self, folder_id):
+        """
+        Delete a folder in Confluence using REST API v2.
+        
+        Args:
+            folder_id (str): The ID of the folder to delete.
+            
+        Returns:
+            bool: True if successful, False if failed.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return False
+        
+        try:
+            # Construct the API URL for deleting a folder
+            api_url = urljoin(self.credentials['url'], f"/wiki/api/v2/folders/{folder_id}")
+            
+            # Set up authentication
+            auth = (self.credentials['email'], self.credentials['api_token'])
+            
+            # Make the API request
+            response = requests.delete(api_url, auth=auth)
+            response.raise_for_status()
+            
+            logger.info(f"Deleted folder with ID: {folder_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting folder {folder_id}: {str(e)}")
+            return False
+    
+    def get_folder_contents(self, folder_id):
+        """
+        Get the contents of a folder using REST API v2.
+        
+        Args:
+            folder_id (str): The ID of the folder to get contents from.
+            
+        Returns:
+            list: List of content items in the folder, or empty list if none found or error.
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated. Please initialize the client with valid credentials.")
+            return []
+        
+        try:
+            # Get the folder first to verify it exists
+            folder = self.get_folder_by_id(folder_id)
+            if not folder:
+                logger.error(f"Could not retrieve folder with ID {folder_id}")
+                return []
+            
+            # Construct the API URL for getting children of a folder
+            # For v2 API, we can use the children endpoint
+            api_url = urljoin(self.credentials['url'], f"/wiki/api/v2/folders/{folder_id}/children")
+            
+            # Set up parameters
+            params = {
+                'limit': 100  # Maximum allowed by the API
+            }
+            
+            # Set up authentication
+            auth = (self.credentials['email'], self.credentials['api_token'])
+            
+            # Set up headers
+            headers = {
+                'Accept': 'application/json'
+            }
+            
+            with Progress() as progress:
+                task = progress.add_task(f"Retrieving contents from folder {folder_id}...", total=None)
+                
+                # Make the API request
+                response = requests.get(api_url, params=params, headers=headers, auth=auth)
+                response.raise_for_status()
+                
+                # Parse the response
+                data = response.json()
+                contents = data.get('results', [])
+                
+                progress.update(task, completed=True)
+            
+            logger.info(f"Retrieved {len(contents)} items from folder {folder_id}")
+            return contents
+            
+        except Exception as e:
+            logger.error(f"Error retrieving contents from folder {folder_id}: {str(e)}")
+            return []
 
 
 def test_authentication(password=None):

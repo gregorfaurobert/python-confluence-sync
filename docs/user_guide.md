@@ -344,95 +344,60 @@ Uploaded 3 pages successfully.
 
 ### Bidirectional Sync
 
-To synchronize content in both directions, handling conflicts:
+To synchronize content in both directions (both pull and push operations):
 
 ```bash
 confluence-sync sync --space SPACE_KEY
 ```
 
-This will prompt you to choose a sync direction:
-1. Pull (Confluence → Local)
-2. Push (Local → Confluence)
-3. Both (Two-way sync)
-
 Example:
 ```
 $ confluence-sync sync --space DOCS
-Choose sync direction:
-1. Pull (Confluence → Local)
-2. Push (Local → Confluence)
-3. Both (Two-way sync)
-Enter your choice (1-3): 3
+Syncing Confluence space 'DOCS'...
+Pulling content from Confluence space 'DOCS'...
+Successfully authenticated to Confluence
+Retrieved 15 pages from space DOCS
 
-Starting two-way sync between space 'DOCS' and '/Users/username/Documents/confluence-docs'...
+Pulling content from 'DOCS'... 100% 0:00:08
+Successfully pulled 15 pages from 'DOCS' to '/Users/username/Documents/confluence-docs'
 
-Pulling from Confluence...
-Retrieved 15 pages from Confluence.
-5 pages were already up-to-date locally.
-10 pages were updated locally.
+Pushing content to Confluence space 'DOCS'...
+Successfully authenticated to Confluence
+Found 3 local files to push
 
-Pushing to Confluence...
-3 local pages were newer than Confluence versions.
-Updated 3 pages in Confluence.
+Pushing content to 'DOCS'... 100% 0:00:05
+Successfully pushed 3 pages to 'DOCS' from '/Users/username/Documents/confluence-docs'
 
-Sync completed successfully!
+Successfully synced Confluence space 'DOCS'.
+Sync completed successfully.
 ```
 
 During bidirectional sync, the tool will:
 1. First pull content from Confluence, skipping any local files that are newer
 2. Then push local content to Confluence, updating any pages that have been modified locally
 
-## Content Conversion
+## Converters
 
-The Confluence Sync tool automatically handles conversion between Confluence HTML content and Markdown format.
+Confluence Sync uses built-in converters to translate between Confluence HTML and Markdown formats. These converters handle the most common formatting elements and structures.
 
-### Confluence HTML to Markdown
+### HTML to Markdown Conversion
 
-When pulling content from Confluence, the tool converts the HTML content to Markdown format, handling:
+The HTML to Markdown converter translates Confluence HTML content to Markdown format. It handles:
 
-- Headings, paragraphs, and text formatting
-- Lists (ordered and unordered)
+- Basic text formatting (bold, italic, underline)
+- Headings and lists
+- Tables
+- Links and images
+- Code blocks
+
+### Markdown to HTML Conversion
+
+The Markdown to HTML converter translates Markdown content to Confluence HTML format. It handles:
+
+- Basic Markdown syntax
 - Tables
 - Code blocks
-- Confluence-specific macros:
-  - Info, note, and warning panels
-  - Code blocks with syntax highlighting
-  - Expand/collapse sections
-  - Table of contents
-
-### Markdown to Confluence HTML
-
-When pushing content to Confluence, the tool converts Markdown to Confluence-compatible HTML, supporting:
-
-- All standard Markdown syntax
-- Special syntax for Confluence-specific elements:
-  - Info panels: `[INFO] This is an info panel [/INFO]`
-  - Note panels: `[NOTE] This is a note panel [/NOTE]`
-  - Warning panels: `[WARNING] This is a warning panel [/WARNING]`
-  - Expand sections: `[EXPAND] Title [CONTENT] Content here [/EXPAND]`
-
-Example Markdown with Confluence-specific syntax:
-
-```markdown
-# Page Title
-
-This is a regular paragraph with **bold** and *italic* text.
-
-[INFO]
-This is an information panel that will be rendered properly in Confluence.
-[/INFO]
-
-## Code Example
-
-```python
-def hello_world():
-    print("Hello, Confluence!")
-```
-
-[WARNING]
-Be careful when editing this page!
-[/WARNING]
-```
+- Links and images
 
 ## Troubleshooting
 

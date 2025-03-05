@@ -15,7 +15,11 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 from confluence_sync.api.confluence_client import ConfluenceClient
 from confluence_sync.config.spaces import SpaceConfigManager
-from confluence_sync.converter.markdown_to_html import convert_markdown_to_confluence
+from confluence_sync.converter import (
+    convert_markdown_to_confluence,
+    enhanced_convert_markdown_to_confluence,
+    MD2CONF_AVAILABLE
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -44,6 +48,8 @@ class PushManager:
         self.force = force
         self.client = ConfluenceClient()
         self.space_config = SpaceConfigManager().get_space_config(space_key)
+        
+        logger.info("Using default Markdown to HTML converter")
         
         if not self.space_config:
             logger.error(f"Space '{space_key}' not found in configuration.")
@@ -212,7 +218,7 @@ class PushManager:
             markdown_content, image_paths = self._process_relative_images(markdown_content, dir_path)
             
             # Convert to Confluence HTML
-            html_content = convert_markdown_to_confluence(markdown_content, self.client.credentials.get('url'))
+            html_content = self._convert_markdown_to_html(markdown_content, self.client.credentials.get('url'))
             
             # Check if we should update or create the page
             if page_id:
@@ -495,6 +501,19 @@ class PushManager:
             logger.error(f"Error uploading images for page {page_id}: {str(e)}")
             return False
 
+    def _convert_markdown_to_html(self, content, base_url=None):
+        """
+        Convert Markdown content to Confluence HTML.
+
+        Args:
+            content (str): The Markdown content to convert.
+            base_url (str, optional): The base URL for converting links.
+
+        Returns:
+            str: The converted HTML content.
+        """
+        return convert_markdown_to_confluence(content, base_url)
+
 
 def push_space(space_key, password=None, force=False):
     """
@@ -506,14 +525,13 @@ def push_space(space_key, password=None, force=False):
         force (bool, optional): Whether to force overwrite remote pages.
 
     Returns:
-        bool: True if successful, False otherwise.
+        bool: True if the push was successful, False otherwise.
     """
     try:
-        manager = PushManager(space_key, force=force)
-        return manager.push()
+        push_manager = PushManager(space_key, password=password, force=force)
+        return push_manager.push()
     except Exception as e:
         logger.error(f"Error pushing space '{space_key}': {str(e)}")
-        console.print(f"[red]Error pushing space '{space_key}': {str(e)}[/red]")
         return False
 
 

@@ -39,7 +39,6 @@ This project aims to create a suite of Python scripts to synchronize content bet
 ### Phase 5: Advanced Features
 - [x] Implement bidirectional sync with conflict resolution
 - [x] Add support for batch operations
-- [ ] Implement caching for improved performance
 - [x] Add logging and reporting
 
 ### Phase 6: Testing and Documentation
@@ -56,10 +55,9 @@ This project aims to create a suite of Python scripts to synchronize content bet
 - [x] Improve handling of special characters in file names
 - [x] Add progress reporting for attachment operations
 - [x] Implement retry mechanism for failed API calls
-- [x] Fix image reference conversion issue
-  - [x] Implement improved HTML preprocessing to handle attachment images
-  - [x] Update image reference matching logic to better handle various formats
-  - [x] Add comprehensive documentation for image handling
+- [ ] Fix image reference conversion issue
+  - [ ] Implement improved HTML preprocessing to handle attachment images
+  - [ ] Update image reference matching logic to better handle various formats
 
 ## Current Focus
 We have completed Phases 1-4 and most of Phase 5. The tool now supports bidirectional synchronization between Confluence spaces and local directories, with HTML-to-Markdown and Markdown-to-HTML conversion. We have also implemented conflict detection and resolution during sync operations.

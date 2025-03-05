@@ -47,36 +47,64 @@ install.bat
 
 ### Initial Configuration
 
-1. Set up your Confluence credentials:
-   ```bash
-   confluence-sync config credentials
-   ```
+### Set up your Confluence credentials
 
-2. Configure a space to sync:
-   ```bash
-   confluence-sync config spaces --add
-   ```
-   
-   Or with direct parameters:
-   ```bash
-   confluence-sync config spaces --space-key SPACE_KEY --space-name "Space Name" --local-dir PATH
-   ```
+```bash
+confluence-sync config credentials
+```
+
+### Configure a space to sync (interactive)
+
+```bash
+confluence-sync config spaces --add
+```
+
+### Configure a space to sync (with direct parameters)
+
+```bash
+confluence-sync config spaces --space-key SPACE_KEY --space-name "Space Name" --local-dir PATH
+```
 
 ### Syncing Content
 
-Pull content from Confluence:
+### Pull content from Confluence
+
 ```bash
 confluence-sync pull --space SPACE_KEY
 ```
 
-Push content to Confluence:
+### Push content to Confluence
+
 ```bash
 confluence-sync push --space SPACE_KEY
 ```
 
-Bidirectional sync:
+### Bidirectional sync (performs both pull and push operations)
+
 ```bash
 confluence-sync sync --space SPACE_KEY
+```
+
+## Configuration
+
+The tool uses a configuration file to store settings for Confluence spaces. You can configure spaces using the following commands:
+
+### Add a new space configuration
+
+```bash
+confluence-sync config spaces --add
+```
+
+### List configured spaces
+
+```bash
+confluence-sync config spaces --list
+```
+
+### Remove a space configuration
+
+```bash
+confluence-sync config spaces --remove SPACE_KEY
 ```
 
 ## Documentation

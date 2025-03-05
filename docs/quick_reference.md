@@ -4,11 +4,15 @@ This quick reference guide provides the most commonly used commands for the Conf
 
 ## Installation
 
-```bash
-# On Linux/macOS
-./install.sh
+### On Linux/macOS
 
-# On Windows
+```bash
+./install.sh
+```
+
+### On Windows
+
+```bash
 install.bat
 ```
 
@@ -16,50 +20,87 @@ install.bat
 
 ### Credentials Management
 
-```bash
-# Set up credentials
-confluence-sync config credentials
+### Set up credentials
 
-# Delete credentials
+```bash
+confluence-sync config credentials
+```
+
+### Delete credentials
+
+```bash
 confluence-sync config credentials --delete
 ```
 
 ### Space Configuration
 
+### Add space interactively
+
 ```bash
-# Add space interactively
 confluence-sync config spaces --add
+```
 
-# Add space directly
+### Add space directly
+
+```bash
 confluence-sync config spaces --space-key SPACE_KEY --space-name "Space Name" --local-dir PATH
+```
 
-# List configured spaces
+### List configured spaces
+
+```bash
 confluence-sync config spaces --list
+```
 
-# Remove space
-confluence-sync config spaces --remove SPACE_KEY
+### Remove space
 
-# Update a space's local directory (two-step process)
+```bash
 confluence-sync config spaces --remove SPACE_KEY
+```
+
+### Update a space's local directory (two-step process)
+
+#### Step 1: Remove the existing space configuration
+
+```bash
+confluence-sync config spaces --remove SPACE_KEY
+```
+
+#### Step 2: Add the space configuration with the new directory
+
+```bash
 confluence-sync config spaces --add --space-key SPACE_KEY --local-dir NEW_PATH
 ```
 
 ## Sync Commands
 
+### Pull from Confluence to local
+
 ```bash
-# Pull from Confluence to local
 confluence-sync pull --space SPACE_KEY
+```
 
-# Pull and overwrite local changes
+### Pull and overwrite local changes
+
+```bash
 confluence-sync pull --space SPACE_KEY --force
+```
 
-# Push from local to Confluence
+### Push from local to Confluence
+
+```bash
 confluence-sync push --space SPACE_KEY
+```
 
-# Push and overwrite remote changes
+### Push and overwrite remote changes
+
+```bash
 confluence-sync push --space SPACE_KEY --force
+```
 
-# Bidirectional sync
+### Bidirectional sync (performs both pull and push operations)
+
+```bash
 confluence-sync sync --space SPACE_KEY
 ```
 
@@ -153,23 +194,50 @@ local-directory/
 
 ## Help Commands
 
+### General help
+
 ```bash
-# General help
 confluence-sync --help
+```
 
-# Help for config command
+### Help for config command
+
+```bash
 confluence-sync config --help
+```
 
-# Help for spaces subcommand
+### Help for spaces subcommand
+
+```bash
 confluence-sync config spaces --help
+```
 
-# Help for pull command
+### Help for pull command
+
+```bash
 confluence-sync pull --help
 ```
 
-## Version Information
+### Version Information
 
 ```bash
-# Show version
 confluence-sync --version
+```
+
+## Converters
+
+The tool uses built-in converters for translating between Confluence HTML and Markdown formats.
+
+### Usage
+
+### Pull content from a Confluence space
+
+```bash
+confluence-sync pull --space YOUR_SPACE_KEY
+```
+
+### Push content to a Confluence space
+
+```bash
+confluence-sync push --space YOUR_SPACE_KEY
 ``` 

@@ -10,6 +10,7 @@ from rich.panel import Panel
 
 from confluence_sync.cli.config_cli import config_cli
 from confluence_sync.sync import pull_space, push_space, sync_space, sync_all_spaces
+from confluence_sync.converter import MD2CONF_AVAILABLE, C2M_AVAILABLE
 
 console = Console()
 
@@ -102,13 +103,12 @@ def push_command(space, all_spaces, force):
 @click.option("--space", help="Confluence space key to sync with")
 @click.option("--all", "all_spaces", is_flag=True, help="Sync all configured spaces")
 @click.option("--force", is_flag=True, help="Force sync even if changes would be overwritten")
-@click.option("--direction", type=click.Choice(["pull", "push", "both"]), help="Sync direction (default: interactive)")
-def sync_command(space, all_spaces, force, direction):
+def sync_command(space, all_spaces, force):
     """
     Bidirectional sync between Confluence and local directory.
     
     This command synchronizes content between the specified Confluence space
-    and the configured local directory, handling conflicts as needed.
+    and the configured local directory in both directions, handling conflicts as needed.
     """
     if not space and not all_spaces:
         console.print("[red]Error: Either --space or --all must be specified.[/red]")
@@ -121,11 +121,11 @@ def sync_command(space, all_spaces, force, direction):
     if all_spaces:
         # Sync all spaces
         console.print("[bold]Syncing all configured spaces...[/bold]")
-        success = sync_all_spaces(force=force, direction=direction)
+        success = sync_all_spaces(force=force, direction="both")
     else:
         # Sync specified space
         console.print(f"[bold]Syncing Confluence space '{space}'...[/bold]")
-        success = sync_space(space, force=force, direction=direction)
+        success = sync_space(space, force=force, direction="both")
     
     if success:
         console.print("[green]Sync completed successfully.[/green]")

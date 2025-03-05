@@ -7,4 +7,6 @@ click==8.1.7
 cryptography==41.0.5
 beautifulsoup4==4.12.2
 html2text==2020.1.16
-rich==13.6.0 
+rich==13.6.0
+lxml==5.3.1
+pymdown-extensions==10.14.3 

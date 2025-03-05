@@ -15,7 +15,11 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 from confluence_sync.api.confluence_client import ConfluenceClient
 from confluence_sync.config.spaces import SpaceConfigManager
-from confluence_sync.converter.html_to_markdown import convert_confluence_content
+from confluence_sync.converter import (
+    convert_confluence_content,
+    enhanced_convert_confluence_content,
+    C2M_AVAILABLE
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -44,6 +48,8 @@ class PullManager:
         self.force = force
         self.client = ConfluenceClient()
         self.space_config = SpaceConfigManager().get_space_config(space_key)
+        
+        logger.info("Using default HTML to Markdown converter")
         
         if not self.space_config:
             logger.error(f"Space '{space_key}' not found in configuration.")
@@ -194,7 +200,7 @@ class PullManager:
             body = page.get('body', {}).get('storage', {}).get('value', '')
             
             # Convert to Markdown
-            markdown_content = convert_confluence_content(body, self.client.credentials.get('url'))
+            markdown_content = self._convert_content_to_markdown(body, self.client.credentials.get('url'))
             
             # Add a title at the top
             markdown_content = f"# {page_title}\n\n{markdown_content}"
@@ -425,6 +431,23 @@ class PullManager:
         
         return text
 
+    def _convert_content_to_markdown(self, content, base_url=None):
+        """
+        Convert Confluence content to Markdown.
+
+        Args:
+            content (str): The Confluence content to convert.
+            base_url (str, optional): The base URL for converting links.
+
+        Returns:
+            str: The converted Markdown content.
+        """
+        # Use the enhanced converter if available, otherwise fall back to the original
+        if C2M_AVAILABLE:
+            return enhanced_convert_confluence_content(content, base_url)
+        else:
+            return convert_confluence_content(content, base_url)
+
 
 def pull_space(space_key, password=None, force=False):
     """
@@ -436,14 +459,13 @@ def pull_space(space_key, password=None, force=False):
         force (bool, optional): Whether to force overwrite local files.
 
     Returns:
-        bool: True if successful, False otherwise.
+        bool: True if the pull was successful, False otherwise.
     """
     try:
-        manager = PullManager(space_key, force=force)
-        return manager.pull()
+        pull_manager = PullManager(space_key, password=password, force=force)
+        return pull_manager.pull()
     except Exception as e:
         logger.error(f"Error pulling space '{space_key}': {str(e)}")
-        console.print(f"[red]Error pulling space '{space_key}': {str(e)}[/red]")
         return False
 
 
