@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from confluence_sync.api.confluence_client import ConfluenceClient
 from confluence_sync.config.credentials import CredentialsManager
@@ -114,7 +114,7 @@ def main():
         return
     
     # Save the HTML content to a file
-    output_path = "test_page.html"
+    output_path = "confluence_sync/tests/test_page.html"
     save_html_to_file(html_content, output_path)
 
 if __name__ == "__main__":
