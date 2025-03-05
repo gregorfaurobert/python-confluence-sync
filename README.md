@@ -111,6 +111,8 @@ confluence-sync config spaces --remove SPACE_KEY
 
 For detailed usage instructions, see the [User Guide](docs/user_guide.md).
 
+For a concise summary of commands and features, check out the [Quick Reference Guide](docs/quick_reference.md).
+
 ## Project Status
 
 This project is fully functional with all core features implemented. The tool supports bidirectional synchronization between Confluence spaces and local directories, with HTML-to-Markdown and Markdown-to-HTML conversion.

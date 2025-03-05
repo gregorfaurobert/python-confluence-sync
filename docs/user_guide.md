@@ -14,6 +14,7 @@ This guide provides detailed information on how to use the Confluence Sync tool 
    - [Bidirectional Sync](#bidirectional-sync)
 4. [Troubleshooting](#troubleshooting)
 5. [FAQ](#faq)
+6. [Quick Reference](#quick-reference)
 
 ## File Structure
 
@@ -451,4 +452,17 @@ Yes, attachments are downloaded to a subdirectory named `_attachments` within ea
 
 ### How are page hierarchies handled?
 
-Page hierarchies in Confluence are represented as directory structures locally, with child pages stored in subdirectories named after their parent pages. 
+Page hierarchies in Confluence are represented as directory structures locally, with child pages stored in subdirectories named after their parent pages.
+
+## Quick Reference
+
+For a concise summary of all commands and features, please refer to the [Quick Reference Guide](quick_reference.md).
+
+The Quick Reference Guide provides:
+- Common command examples
+- Special Markdown syntax for Confluence elements
+- File structure overview
+- Image reference formats
+- And more
+
+It's designed to be a handy reference once you're familiar with the basic concepts of the tool. 
