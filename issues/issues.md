@@ -1,8 +1,7 @@
 
 # Issues
 
-1. Doesn't convert images to Markdown
-2. Tables are not well converted 
-3. Callouts are not well converted
-4. horizontal rulke are converted "***" instead of "---"
-5. Folders are not synced
+1. Folders are not synced
+2. sync doesn't uplaod local attachments to confluence space
+3. Checkbox are not well converted to confluence html
+4. Callouts are not well converted to confluence panels
