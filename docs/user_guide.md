@@ -54,6 +54,28 @@ local-directory/
 
 Each directory also contains a `.confluence-metadata.json` file that stores information about the page, such as its ID, version, and last updated time. This metadata is used to track changes and handle conflicts during sync operations.
 
+### Markdown File Structure
+
+Each Markdown file contains:
+
+1. **Frontmatter** - YAML metadata at the beginning of the file that stores:
+   - `link`: The direct URL to the Confluence page
+   - `version`: The version number of the Confluence page
+   
+   Example:
+   ```
+   ---
+   link: https://your-domain.atlassian.net/wiki/spaces/SPACE/pages/123456789
+   version: 5
+   ---
+   ```
+
+2. **Page Title** - The title of the page as a level 1 heading (`# Title`)
+
+3. **Content** - The actual content of the page in Markdown format
+
+The frontmatter is automatically added when pulling content from Confluence and is used to track the page's origin and version for synchronization purposes.
+
 ## Attachments and Images
 
 When pulling content from Confluence, attachments (including images) are stored in a special `_attachments` directory within each page's directory. This allows you to reference images in your Markdown files using relative paths.

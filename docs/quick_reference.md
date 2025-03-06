@@ -192,6 +192,27 @@ local-directory/
         └── child-page-2.md    # Markdown file with slugified page name
 ```
 
+### Markdown File Structure
+
+Each Markdown file includes frontmatter at the beginning that stores metadata:
+
+```markdown
+---
+link: https://your-domain.atlassian.net/wiki/spaces/SPACE/pages/123456789
+version: 5
+---
+
+# Page Title
+
+Page content starts here...
+```
+
+The frontmatter contains:
+- `link`: Direct URL to the Confluence page
+- `version`: Version number of the Confluence page
+
+This metadata is used during synchronization to track the page's origin and version.
+
 ## Help Commands
 
 ### General help

@@ -202,8 +202,24 @@ class PullManager:
             # Convert to Markdown
             markdown_content = self._convert_content_to_markdown(body, self.client.credentials.get('url'))
             
-            # Add a title at the top
-            markdown_content = f"# {page_title}\n\n{markdown_content}"
+            # Create metadata
+            metadata = {
+                'id': page_id,
+                'title': page_title,
+                'version': page.get('version', {}).get('number'),
+                'remote_updated': page.get('version', {}).get('when'),
+                'local_updated': datetime.now().isoformat(),
+                'space_key': self.space_key,
+                'file_name': file_name  # Store the file name in metadata
+            }
+            
+            # Create frontmatter
+            base_url = self.client.credentials.get('url', '').rstrip('/')
+            page_url = f"{base_url}/wiki/spaces/{self.space_key}/pages/{page_id}"
+            frontmatter = f"---\nlink: {page_url}\nversion: {metadata['version']}\n---\n\n"
+            
+            # Add a title at the top (after frontmatter)
+            markdown_content = f"{frontmatter}# {page_title}\n\n{markdown_content}"
             
             # Process attachments before writing the file
             attachments = self._process_attachments(page_id, dir_path)
@@ -217,16 +233,6 @@ class PullManager:
                 f.write(markdown_content)
             
             # Save metadata
-            metadata = {
-                'id': page_id,
-                'title': page_title,
-                'version': page.get('version', {}).get('number'),
-                'remote_updated': page.get('version', {}).get('when'),
-                'local_updated': datetime.now().isoformat(),
-                'space_key': self.space_key,
-                'file_name': file_name  # Store the file name in metadata
-            }
-            
             with open(os.path.join(dir_path, METADATA_FILENAME), 'w') as f:
                 json.dump(metadata, f, indent=2)
             

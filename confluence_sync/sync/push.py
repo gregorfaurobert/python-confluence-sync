@@ -207,6 +207,14 @@ class PushManager:
             with open(markdown_path, 'r', encoding='utf-8') as f:
                 markdown_content = f.read()
             
+            # Remove frontmatter if present
+            frontmatter_pattern = r'^---\n(.*?)\n---\n\n'
+            frontmatter_match = re.match(frontmatter_pattern, markdown_content, re.DOTALL)
+            if frontmatter_match:
+                # Remove the frontmatter from the content
+                markdown_content = re.sub(frontmatter_pattern, '', markdown_content, 1, re.DOTALL)
+                logger.debug(f"Removed frontmatter from '{markdown_path}'")
+            
             # Extract title from markdown if it starts with a heading
             title_match = re.match(r'^#\s+(.+)$', markdown_content.split('\n')[0])
             if title_match:
