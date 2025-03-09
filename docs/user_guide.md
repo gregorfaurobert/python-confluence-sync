@@ -418,6 +418,12 @@ The HTML to Markdown converter translates Confluence HTML content to Markdown fo
 The Markdown to HTML converter translates Markdown content to Confluence HTML format. It handles:
 
 - Basic Markdown syntax
+  - Headings (# Heading)
+  - Emphasis (*italic* and **bold**)
+  - Lists (ordered and unordered)
+  - Links ([text](url))
+  - Images (![alt](url))
+  - Strikethrough (~~text~~)
 - Tables
 - Code blocks
 - Links and images

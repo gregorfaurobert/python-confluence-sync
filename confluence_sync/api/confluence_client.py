@@ -326,57 +326,10 @@ class ConfluenceClient:
         Returns:
             dict: Attachment information, or None if error.
         """
-        if not self.authenticated:
-            logger.error("Not authenticated. Please initialize the client with valid credentials.")
-            return None
-        
-        try:
-            # Get the filename from the path
-            filename = os.path.basename(file_path)
-            
-            # Check if file exists
-            if not os.path.exists(file_path):
-                logger.error(f"File not found: {file_path}")
-                return None
-            
-            # Upload the attachment using the direct REST API approach
-            url = f"{self.credentials.get('url')}/rest/api/content/{page_id}/child/attachment"
-            
-            headers = {
-                'X-Atlassian-Token': 'no-check'
-            }
-            
-            auth = (self.credentials.get('email'), self.credentials.get('api_token'))
-            
-            with Progress() as progress:
-                task = progress.add_task(f"[cyan]Uploading {filename}...", total=1)
-                
-                with open(file_path, 'rb') as file_obj:
-                    files = {
-                        'file': (filename, file_obj, 'application/octet-stream')
-                    }
-                    
-                    response = requests.post(
-                        url, 
-                        headers=headers, 
-                        auth=auth, 
-                        files=files
-                    )
-                    
-                    progress.update(task, advance=1)
-                    
-                    if response.status_code in (200, 201):
-                        result = response.json()
-                        logger.info(f"Created attachment '{filename}' on page {page_id}")
-                        return result
-                    else:
-                        logger.error(f"Error creating attachment '{filename}': HTTP {response.status_code}")
-                        logger.error(f"Response: {response.text}")
-                        return None
-            
-        except Exception as e:
-            logger.error(f"Error creating attachment from '{file_path}': {str(e)}")
-            return None
+        # This method is deprecated and no longer used.
+        # Functionality has been inlined in upload_attachments_to_page
+        logger.warning("create_attachment is deprecated, use upload_attachments_to_page instead")
+        return None
     
     def update_attachment(self, page_id, attachment_id, file_path):
         """
@@ -390,57 +343,10 @@ class ConfluenceClient:
         Returns:
             dict: Updated attachment information, or None if error.
         """
-        if not self.authenticated:
-            logger.error("Not authenticated. Please initialize the client with valid credentials.")
-            return None
-        
-        try:
-            # Get the filename from the path
-            filename = os.path.basename(file_path)
-            
-            # Check if file exists
-            if not os.path.exists(file_path):
-                logger.error(f"File not found: {file_path}")
-                return None
-            
-            # Update the attachment using the direct REST API approach
-            url = f"{self.credentials.get('url')}/rest/api/content/{page_id}/child/attachment/{attachment_id}/data"
-            
-            headers = {
-                'X-Atlassian-Token': 'no-check'
-            }
-            
-            auth = (self.credentials.get('email'), self.credentials.get('api_token'))
-            
-            with Progress() as progress:
-                task = progress.add_task(f"[cyan]Updating {filename}...", total=1)
-                
-                with open(file_path, 'rb') as file_obj:
-                    files = {
-                        'file': (filename, file_obj, 'application/octet-stream')
-                    }
-                    
-                    response = requests.post(
-                        url, 
-                        headers=headers, 
-                        auth=auth, 
-                        files=files
-                    )
-                    
-                    progress.update(task, advance=1)
-                    
-                    if response.status_code in (200, 201):
-                        result = response.json()
-                        logger.info(f"Updated attachment '{filename}' on page {page_id}")
-                        return result
-                    else:
-                        logger.error(f"Error updating attachment '{filename}': HTTP {response.status_code}")
-                        logger.error(f"Response: {response.text}")
-                        return None
-            
-        except Exception as e:
-            logger.error(f"Error updating attachment from '{file_path}': {str(e)}")
-            return None
+        # This method is deprecated and no longer used.
+        # Functionality has been inlined in upload_attachments_to_page
+        logger.warning("update_attachment is deprecated, use upload_attachments_to_page instead")
+        return None
     
     def create_page(self, space_key, title, body, parent_id=None):
         """
@@ -663,30 +569,59 @@ class ConfluenceClient:
             
             # Dictionary to store attachment info
             attachment_info = {}
+            failed_attachments = []
             
-            # Upload each file
-            with Progress() as progress:
-                task = progress.add_task(f"[cyan]Uploading attachments...", total=len(file_paths))
+            # Log the total number of attachments to upload
+            logger.info(f"Uploading {len(file_paths)} attachments to page {page_id}")
+            
+            # Upload each file without using Progress (to avoid nested Progress instances)
+            for file_path in file_paths:
+                filename = os.path.basename(file_path)
                 
-                for file_path in file_paths:
-                    filename = os.path.basename(file_path)
+                try:
+                    # Check if file exists
+                    if not os.path.exists(file_path):
+                        logger.error(f"File not found: {file_path}")
+                        failed_attachments.append(filename)
+                        continue
                     
-                    # Check if attachment already exists
+                    # Note if this is an update to an existing attachment
                     if filename in current_attachments_dict:
-                        # Update attachment
-                        result = self.update_attachment(
-                            page_id, 
-                            current_attachments_dict[filename].get('id'), 
-                            file_path
-                        )
+                        attachment = current_attachments_dict[filename]
+                        attachment_id = attachment.get('id')
+                        logger.info(f"Updating existing attachment '{filename}' (ID: {attachment_id}) on page {page_id}")
+                        # We don't need to delete the existing attachment - Confluence will handle versioning
                     else:
-                        # Create new attachment
-                        result = self.create_attachment(page_id, file_path)
+                        logger.info(f"Creating new attachment '{filename}' on page {page_id}")
+                    
+                    # Upload the attachment (whether it's new or replacing an existing one)
+                    # Confluence will automatically handle versioning for existing attachments
+                    logger.info(f"Uploading attachment '{filename}' to page {page_id}")
+                    
+                    # Check file size and log warning if it's large
+                    file_size = os.path.getsize(file_path)
+                    if file_size > 10 * 1024 * 1024:  # 10 MB
+                        logger.warning(f"Large attachment '{filename}' ({file_size / 1024 / 1024:.2f} MB) may take longer to upload")
+                    
+                    result = self.client.attach_file(
+                        filename=file_path,  # This is the local file path
+                        name=filename,       # This is the name to use in Confluence
+                        page_id=page_id      # The page to attach to
+                    )
                     
                     if result:
+                        logger.info(f"Successfully uploaded attachment '{filename}' to page {page_id}")
                         attachment_info[filename] = result
-                    
-                    progress.update(task, advance=1)
+                    else:
+                        logger.error(f"Error uploading attachment '{filename}' - API returned None")
+                        failed_attachments.append(filename)
+                
+                except Exception as e:
+                    logger.error(f"Error processing attachment '{filename}': {str(e)}")
+                    failed_attachments.append(filename)
+            
+            if failed_attachments:
+                logger.warning(f"Failed to upload {len(failed_attachments)} attachments: {', '.join(failed_attachments)}")
             
             logger.info(f"Uploaded {len(attachment_info)} attachments to page {page_id}")
             return attachment_info

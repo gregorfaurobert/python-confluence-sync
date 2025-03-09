@@ -12,6 +12,7 @@ from datetime import datetime
 import re
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+import yaml
 
 from confluence_sync.api.confluence_client import ConfluenceClient
 from confluence_sync.config.spaces import SpaceConfigManager
@@ -20,6 +21,8 @@ from confluence_sync.converter import (
     enhanced_convert_markdown_to_confluence,
     MD2CONF_AVAILABLE
 )
+from confluence_sync.converter.markdown_to_html import MarkdownToConfluenceConverter
+from confluence_sync.config.credentials import CredentialsManager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -31,6 +34,28 @@ console = Console()
 METADATA_FILENAME = ".confluence-sync.json"
 ATTACHMENTS_DIR = "_attachments"
 
+# Helper functions for metadata
+def read_metadata(dir_path):
+    """Read metadata from a directory."""
+    metadata_path = os.path.join(dir_path, METADATA_FILENAME)
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading metadata from {metadata_path}: {e}")
+    return {}
+
+def write_metadata(dir_path, metadata):
+    """Write metadata to a directory."""
+    metadata_path = os.path.join(dir_path, METADATA_FILENAME)
+    try:
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error writing metadata to {metadata_path}: {e}")
+        return False
 
 class PushManager:
     """Manager for pushing content from local files to Confluence."""
@@ -41,15 +66,25 @@ class PushManager:
 
         Args:
             space_key (str): The key of the Confluence space to push to.
-            password (str, optional): Not used, kept for backward compatibility.
+            password (str, optional): Password for decrypting credentials.
             force (bool, optional): Whether to force overwrite remote pages.
         """
         self.space_key = space_key
         self.force = force
-        self.client = ConfluenceClient()
-        self.space_config = SpaceConfigManager().get_space_config(space_key)
+        
+        # Get credentials
+        credentials_manager = CredentialsManager()
+        credentials = credentials_manager.get_credentials(password)
+        
+        if not credentials:
+            raise ValueError("No credentials found. Please run 'confluence-sync config credentials' first.")
+        
+        # Initialize Confluence client
+        self.client = ConfluenceClient(credentials=credentials)
         
         logger.info("Using default Markdown to HTML converter")
+        
+        self.space_config = SpaceConfigManager().get_space_config(space_key)
         
         if not self.space_config:
             logger.error(f"Space '{space_key}' not found in configuration.")
@@ -264,7 +299,12 @@ class PushManager:
                         
                         # Upload any images with relative paths
                         if image_paths:
-                            self._upload_images(page_id, image_paths)
+                            if not self._upload_images(page_id, image_paths):
+                                logger.warning(f"Failed to upload some attachments for page '{page_title}'")
+                        
+                        # Process attachments in the _attachments directory
+                        if not self._process_attachments(page_id, dir_path):
+                            logger.warning(f"Failed to process attachments for page '{page_title}'")
                         
                         # Update metadata
                         if os.path.exists(metadata_path):
@@ -301,7 +341,12 @@ class PushManager:
                         
                         # Upload any images with relative paths
                         if image_paths:
-                            self._upload_images(result.get('id'), image_paths)
+                            if not self._upload_images(result.get('id'), image_paths):
+                                logger.warning(f"Failed to upload some attachments for page '{page_title}'")
+                        
+                        # Process attachments in the _attachments directory
+                        if not self._process_attachments(result.get('id'), dir_path):
+                            logger.warning(f"Failed to process attachments for page '{page_title}'")
                         
                         # Update metadata
                         metadata = {
@@ -335,7 +380,12 @@ class PushManager:
                     
                     # Upload any images with relative paths
                     if image_paths:
-                        self._upload_images(result.get('id'), image_paths)
+                        if not self._upload_images(result.get('id'), image_paths):
+                            logger.warning(f"Failed to upload some attachments for page '{page_title}'")
+                    
+                    # Process attachments in the _attachments directory
+                    if not self._process_attachments(result.get('id'), dir_path):
+                        logger.warning(f"Failed to process attachments for page '{page_title}'")
                     
                     # Create metadata
                     metadata = {
@@ -413,6 +463,7 @@ class PushManager:
             # Check if attachments directory exists
             attachments_dir = os.path.join(dir_path, ATTACHMENTS_DIR)
             if not os.path.exists(attachments_dir):
+                logger.debug(f"No attachments directory found at {attachments_dir}")
                 return True
             
             # Get all files in the attachments directory
@@ -424,16 +475,27 @@ class PushManager:
                 if os.path.isdir(file_path):
                     continue
                 
+                # Skip hidden files
+                if filename.startswith('.'):
+                    continue
+                
                 file_paths.append(file_path)
             
             if not file_paths:
                 logger.info(f"No attachments found in {attachments_dir}")
                 return True
             
+            logger.info(f"Found {len(file_paths)} attachments to upload from {attachments_dir}")
+            
             # Use the improved batch upload method
             result = self.client.upload_attachments_to_page(page_id, file_paths)
             
-            return result is not None
+            if result is not None:
+                logger.info(f"Successfully uploaded {len(result)} attachments to page {page_id}")
+                return True
+            else:
+                logger.error(f"Failed to upload attachments to page {page_id}")
+                return False
             
         except Exception as e:
             logger.error(f"Error processing attachments for page {page_id}: {str(e)}")
@@ -470,6 +532,15 @@ class PushManager:
                 else:
                     # Path is relative to the Markdown file's directory
                     full_path = os.path.join(dir_path, image_path)
+                    
+                    # If the file doesn't exist in the current directory,
+                    # check if it exists in the _attachments directory
+                    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+                        attachments_path = os.path.join(dir_path, '_attachments', os.path.basename(image_path))
+                        if os.path.exists(attachments_path) and os.path.isfile(attachments_path):
+                            full_path = attachments_path
+                            # Update the image path to use _attachments/
+                            image_path = f"_attachments/{os.path.basename(image_path)}"
                 
                 # Check if the file exists
                 if os.path.exists(full_path) and os.path.isfile(full_path):
@@ -521,6 +592,107 @@ class PushManager:
             str: The converted HTML content.
         """
         return convert_markdown_to_confluence(content, base_url)
+
+    def _save_page_id_to_metadata(self, dir_path, page_id):
+        """
+        Save the page ID to the metadata file.
+
+        Args:
+            dir_path (str): Path to the directory containing the metadata file.
+            page_id (str): The ID of the page to save.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if not dir_path:
+            logger.warning("Cannot save page ID to metadata: directory path is None")
+            return False
+
+        # Read existing metadata
+        metadata = read_metadata(dir_path)
+        
+        # Update with page ID
+        metadata['id'] = page_id
+        
+        # Get page details from Confluence to update metadata
+        page_details = self.client.get_page_by_id(page_id)
+        if page_details:
+            # Update metadata with additional information
+            metadata['title'] = page_details.get('title', metadata.get('title', ''))
+            metadata['version'] = page_details.get('version', {}).get('number', metadata.get('version', 1))
+            metadata['remote_updated'] = page_details.get('version', {}).get('when', metadata.get('remote_updated', ''))
+            metadata['space_key'] = self.space_key
+        
+        # Always update local_updated timestamp
+        metadata['local_updated'] = datetime.now().isoformat()
+        
+        # Write updated metadata
+        return write_metadata(dir_path, metadata)
+
+    def _update_or_create_page(self, page_id, space_key, title, markdown_content, parent_id=None, dir_path=None):
+        """
+        Update an existing page or create a new one.
+
+        Args:
+            page_id (str, optional): The ID of the page to update, or None to create a new page.
+            space_key (str): The key of the space.
+            title (str): The title of the page.
+            markdown_content (str): The Markdown content to convert and upload.
+            parent_id (str, optional): The ID of the parent page, if creating a new page.
+            dir_path (str, optional): Path to the directory containing the Markdown file.
+
+        Returns:
+            str: The ID of the updated or created page, or None if error.
+        """
+        try:
+            # Process images in the Markdown content
+            processed_markdown, image_paths = self._process_relative_images(markdown_content, dir_path)
+            
+            # Convert Markdown to Confluence HTML
+            html_content = self._convert_markdown_to_html(processed_markdown, self.client.credentials.get('url'))
+            
+            if page_id:
+                # Update existing page
+                page_id = self.client.update_page(page_id, title, html_content, parent_id)
+                if page_id:
+                    logger.info(f"Updated page '{title}'")
+                
+                    # Upload images if any
+                    if image_paths:
+                        if not self._upload_images(page_id, image_paths):
+                            logger.warning(f"Failed to upload some attachments for page '{title}'")
+                    
+                    # Upload attachments if any
+                    self._process_attachments(page_id, dir_path)
+                    
+                    return page_id
+                else:
+                    logger.error(f"Failed to update page '{title}'")
+                    return None
+            else:
+                # Create new page
+                page_id = self.client.create_page(space_key, title, html_content, parent_id)
+                if page_id:
+                    logger.info(f"Created page '{title}'")
+                    
+                    # Upload images if any
+                    if image_paths:
+                        if not self._upload_images(page_id, image_paths):
+                            logger.warning(f"Failed to upload some attachments for page '{title}'")
+                    
+                    # Upload attachments if any
+                    self._process_attachments(page_id, dir_path)
+                    
+                    # Save page ID to metadata
+                    self._save_page_id_to_metadata(dir_path, page_id)
+                    
+                    return page_id
+                else:
+                    logger.error(f"Failed to create page '{title}'")
+                    return None
+        except Exception as e:
+            logger.error(f"Error updating/creating page '{title}': {str(e)}")
+            return None
 
 
 def push_space(space_key, password=None, force=False):

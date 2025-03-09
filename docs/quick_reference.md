@@ -111,26 +111,14 @@ When writing Markdown files for Confluence, you can use special syntax for Confl
 ### Info, Note, and Warning Panels
 
 ```markdown
-[INFO]
-This is an information panel.
-[/INFO]
+> [!NOTE] Title Note
+> Content Note
 
-[NOTE]
-This is a note panel.
-[/NOTE]
+> [!WARNING] Title Warning
+> Content Warning
 
-[WARNING]
-This is a warning panel.
-[/WARNING]
-```
-
-### Expand/Collapse Sections
-
-```markdown
-[EXPAND] Section Title
-[CONTENT]
-This content will be in an expandable section.
-[/EXPAND]
+> [!SUCCESS] Title Success
+> Content Success
 ```
 
 ### Code Blocks with Syntax Highlighting
@@ -183,13 +171,17 @@ local-directory/
 ├── .confluence-metadata.json  # Sync metadata (do not edit)
 ├── Page 1/                    # Directory for a top-level page
 │   └── page-1.md              # Markdown file with slugified page name
+│   └── .confluence-metadata.json  # Sync metadata (do not edit)
 ├── Page 2/                    # Directory for another top-level page
 │   └── page-2.md              # Markdown file with slugified page name
+│   └── .confluence-metadata.json  # Sync metadata (do not edit)
 └── Subfolder/                 # Directory for child pages
     ├── Child Page 1/          # Directory for a child page
     │   └── child-page-1.md    # Markdown file with slugified page name
+    │   └── .confluence-metadata.json  # Sync metadata (do not edit)
     └── Child Page 2/          # Directory for another child page
         └── child-page-2.md    # Markdown file with slugified page name
+        └── .confluence-metadata.json  # Sync metadata (do not edit)
 ```
 
 ### Markdown File Structure
@@ -248,17 +240,3 @@ confluence-sync --version
 ## Converters
 
 The tool uses built-in converters for translating between Confluence HTML and Markdown formats.
-
-### Usage
-
-### Pull content from a Confluence space
-
-```bash
-confluence-sync pull --space YOUR_SPACE_KEY
-```
-
-### Push content to a Confluence space
-
-```bash
-confluence-sync push --space YOUR_SPACE_KEY
-``` 

@@ -1,10 +1,12 @@
 # Python Confluence Sync
 
+! FULLY IMPLEMENTED with Cursor and AI!
+
 A suite of Python scripts for syncing Confluence spaces with local directories. This tool allows you to work with Confluence content in your preferred text editor or IDE, using Markdown format, and sync changes back to Confluence.
 
 ## Features
 
-- **Secure Credential Storage**: Safely store your Confluence API credentials with local encryption
+- **Credential Storage**: Store your Confluence API credentials
 - **Space Configuration Management**: Configure which Confluence spaces to sync with which local directories
 - **Content Synchronization**:
   - Pull content from Confluence to local Markdown files
@@ -14,6 +16,7 @@ A suite of Python scripts for syncing Confluence spaces with local directories. 
   - Convert Confluence HTML to Markdown when pulling content
   - Convert Markdown to Confluence HTML when pushing content
   - Support for Confluence-specific elements (info/note/warning panels, code blocks, etc.)
+  - Support for common Markdown syntax including tables, code blocks, headings, lists, links, images, and strikethrough text
 - **Attachment Handling**: Sync attachments between Confluence and local directories
 - **Page Hierarchy Support**: Maintain page hierarchies and relationships
 - **Metadata Tracking**: Track sync state and changes with metadata
@@ -47,7 +50,7 @@ install.bat
 
 ### Initial Configuration
 
-### Set up your Confluence credentials
+### Set up your Confluence credentials. (1 set up only)
 
 ```bash
 confluence-sync config credentials
@@ -107,6 +110,10 @@ confluence-sync config spaces --list
 confluence-sync config spaces --remove SPACE_KEY
 ```
 
+### Confluence Result
+
+When synced to Confluence, code blocks will be displayed as code blocks with syntax highlighting.
+
 ## Documentation
 
 For detailed usage instructions, see the [User Guide](docs/user_guide.md).
@@ -119,7 +126,7 @@ This project is fully functional with all core features implemented. The tool su
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+N/A
 
 ## Contributing
 

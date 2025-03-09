@@ -192,7 +192,7 @@ class ConfluenceHTMLConverter:
             block.replace_with(toc_div)
 
     def _fix_relative_links(self, soup):
-        """Fix relative links in the HTML content."""
+        """Fix relative links in the HTML."""
         if not self.base_url:
             return
         
@@ -231,6 +231,28 @@ class ConfluenceHTMLConverter:
                 # Store the original filename in the alt text if it's not already there
                 if not img_tag.get('alt'):
                     img_tag['alt'] = filename
+        
+        # Handle Confluence image macros
+        for img_macro in soup.find_all('ac:image'):
+            # Extract image filename from attachment
+            attachment = img_macro.find('ri:attachment')
+            if attachment and attachment.has_attr('ri:filename'):
+                filename = attachment['ri:filename']
+                
+                # Create a new img tag to replace the ac:image macro
+                new_img = soup.new_tag('img')
+                
+                # Set the src attribute with our special marker
+                new_img['src'] = f"CONFLUENCE_ATTACHMENT:{filename}"
+                
+                # Try to get alt text from the ac:image macro
+                if img_macro.has_attr('ac:alt'):
+                    new_img['alt'] = img_macro['ac:alt']
+                else:
+                    new_img['alt'] = filename
+                
+                # Replace the ac:image macro with our new img tag
+                img_macro.replace_with(new_img)
 
     def convert_to_markdown(self, html_content):
         """
@@ -264,12 +286,12 @@ class ConfluenceHTMLConverter:
     def postprocess_markdown(self, markdown):
         """
         Post-process the Markdown content.
-
+        
         Args:
-            markdown (str): The Markdown content to post-process.
-
+            markdown (str): The Markdown content to process.
+            
         Returns:
-            str: Post-processed Markdown content.
+            str: Processed Markdown content.
         """
         if not markdown:
             return ""
@@ -283,6 +305,14 @@ class ConfluenceHTMLConverter:
         # Replace our special attachment markers with a format that will be recognized by the PullManager
         markdown = re.sub(
             r'!\[([^\]]*)\]\(CONFLUENCE_ATTACHMENT:([^)]+)\)',
+            r'![confluence-attachment:\2](confluence-attachment://\2)',
+            markdown
+        )
+        
+        # Fix image references that might have been missed
+        # This handles cases where the image path is just _attachments/filename.jpg
+        markdown = re.sub(
+            r'!\[([^\]]*)\]\(_attachments/([^)]+)\)',
             r'![confluence-attachment:\2](confluence-attachment://\2)',
             markdown
         )
@@ -313,11 +343,11 @@ class ConfluenceHTMLConverter:
             image_path = match.group(2)
             
             # Check if this is our special marker (already processed)
-            if image_path.startswith('confluence-attachment://'):
+            if image_path.startswith('confluence-attachment://') or image_path.startswith('CONFLUENCE_ATTACHMENT:'):
                 return match.group(0)
             
-            # Check if this is an attachment URL
-            if '/download/attachments/' in image_path or '/_attachments/' in image_path or '/attachments/' in image_path or 'attachments/' in image_path:
+            # Check if this is an attachment URL or a path to the _attachments directory
+            if '/download/attachments/' in image_path or '/_attachments/' in image_path or '/attachments/' in image_path or 'attachments/' in image_path or image_path.startswith('_attachments/'):
                 # Extract the filename from the path
                 filename = os.path.basename(image_path)
                 

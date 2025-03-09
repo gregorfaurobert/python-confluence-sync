@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to retrieve the "Test" page from Confluence as HTML.
+Test script to retrieve a specific page from Confluence as HTML.
 """
 
 import os
@@ -97,16 +97,9 @@ def save_html_to_file(html_content, output_path):
         print(f"Error saving HTML content: {e}")
 
 def main():
-    # Path to the Test directory in Obsidian
-    test_dir = "obsidian-test/Obsidian Test Home/Test"
-    
-    # Get space key and page ID from config file
-    result = get_space_and_page_info(test_dir)
-    if not result:
-        return
-    
-    space_key, page_id = result
-    print(f"Found page ID {page_id} in space {space_key}")
+    # Use the specific page ID for the bonjour page
+    page_id = "6288867362"
+    print(f"Getting HTML for page ID {page_id}")
     
     # Get the page as HTML
     html_content = get_page_as_html(page_id)
@@ -114,7 +107,7 @@ def main():
         return
     
     # Save the HTML content to a file
-    output_path = "confluence_sync/tests/test_page.html"
+    output_path = "bonjour_page.html"
     save_html_to_file(html_content, output_path)
 
 if __name__ == "__main__":

@@ -8,12 +8,17 @@ import re
 import os
 import logging
 import markdown
+import base64
 from bs4 import BeautifulSoup
+
+from confluence_sync.converter.integration import MD2CONF_AVAILABLE
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Check if the markdown-to-confluence library is available
+MD2CONF_PATH = MD2CONF_AVAILABLE
 
 class MarkdownToConfluenceConverter:
     """Converter for Markdown content to Confluence HTML."""
@@ -34,9 +39,18 @@ class MarkdownToConfluenceConverter:
                 'markdown.extensions.toc',
                 'markdown.extensions.nl2br',
                 'markdown.extensions.sane_lists',
-                'markdown.extensions.smarty'
+                'markdown.extensions.smarty',
+                'pymdownx.tilde'  # Add support for strikethrough with ~~text~~
             ]
         )
+
+    def __del__(self):
+        """Clean up temporary resources when the object is destroyed."""
+        pass
+
+    def cleanup(self):
+        """Clean up temporary resources."""
+        pass
 
     def convert_to_html(self, markdown_content):
         """
@@ -60,6 +74,16 @@ class MarkdownToConfluenceConverter:
             
             # Post-process the HTML
             html = self.postprocess_html(html)
+            
+            # Fix image paths for Confluence
+            soup = BeautifulSoup(html, 'html.parser')
+            self._fix_relative_links(soup)
+            html = str(soup)
+            
+            # Convert to Confluence storage format
+            html = self._convert_to_storage_format(html)
+            
+            # No need for final check for image paths as we now properly convert to Confluence format
             
             return html
             
@@ -148,12 +172,15 @@ class MarkdownToConfluenceConverter:
         # Find all pre/code elements
         code_blocks = soup.find_all('pre')
         
+        logger.info(f"Found {len(code_blocks)} code blocks in total")
+        
         for block in code_blocks:
             code_elem = block.find('code')
             if code_elem:
                 # Get the language class if available
                 language = ""
                 if 'class' in code_elem.attrs:
+                    logger.info(f"Code block has classes: {code_elem.attrs['class']}")
                     for cls in code_elem['class']:
                         if cls.startswith('language-'):
                             language = cls[9:]  # Remove 'language-' prefix
@@ -162,7 +189,7 @@ class MarkdownToConfluenceConverter:
                 # Get the code content
                 code_content = code_elem.text
                 
-                # Create a Confluence code macro
+                # Create a Confluence code macro for all code blocks
                 code_macro = f"""
                 <ac:structured-macro ac:name="code">
                     <ac:parameter ac:name="language">{language}</ac:parameter>
@@ -176,7 +203,25 @@ class MarkdownToConfluenceConverter:
 
     def _fix_relative_links(self, soup):
         """Fix relative links in the HTML content."""
+        logger.info("Fixing relative links in HTML content")
+        
+        # Fix images regardless of base URL
+        for img_tag in soup.find_all('img', src=True):
+            src = img_tag['src']
+            logger.info(f"Processing image with src: {src}")
+            
+            # For all image references, we'll extract just the filename
+            # The actual conversion to Confluence format happens in _convert_to_storage_format
+            if src and not src.startswith(('data:')):
+                # Extract the filename from the path or URL
+                filename = os.path.basename(src)
+                # Update the src to just the filename
+                img_tag['src'] = filename
+                logger.info(f"Updated image src to: {filename}")
+        
+        # Skip link fixing if no base URL is provided
         if not self.base_url:
+            logger.info("No base URL provided, skipping link fixing")
             return
         
         # Fix links
@@ -184,12 +229,7 @@ class MarkdownToConfluenceConverter:
             href = a_tag['href']
             if href and not href.startswith(('http://', 'https://', 'mailto:', '#')):
                 a_tag['href'] = self.base_url.rstrip('/') + '/' + href.lstrip('/')
-        
-        # Fix images
-        for img_tag in soup.find_all('img', src=True):
-            src = img_tag['src']
-            if src and not src.startswith(('http://', 'https://', 'data:')):
-                img_tag['src'] = self.base_url.rstrip('/') + '/' + src.lstrip('/')
+                logger.info(f"Updated link href to: {a_tag['href']}")
 
     def _convert_to_storage_format(self, html_content):
         """
@@ -208,6 +248,42 @@ class MarkdownToConfluenceConverter:
         html_content = re.sub(r'<script>(.*?)</script>', r'<script><![CDATA[\1]]></script>', html_content, flags=re.DOTALL)
         html_content = re.sub(r'<style>(.*?)</style>', r'<style><![CDATA[\1]]></style>', html_content, flags=re.DOTALL)
         
+        # Parse the HTML to handle image tags properly
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Convert img tags to Confluence's ac:image format
+        for img_tag in soup.find_all('img', src=True):
+            src = img_tag['src']
+            alt_text = img_tag.get('alt', os.path.basename(src))
+            
+            # Extract just the filename if it's a path or URL
+            filename = os.path.basename(src)
+            
+            # Create the Confluence image macro
+            ac_image = soup.new_tag('ac:image')
+            
+            # Add attributes
+            ac_image['ac:alt'] = alt_text
+            
+            # Add alignment if specified
+            if 'align' in img_tag.attrs:
+                ac_image['ac:align'] = img_tag['align']
+            
+            # Create the attachment reference
+            ri_attachment = soup.new_tag('ri:attachment')
+            ri_attachment['ri:filename'] = filename
+            
+            # Add the attachment reference to the image macro
+            ac_image.append(ri_attachment)
+            
+            # Replace the original img tag with the Confluence image macro
+            img_tag.replace_with(ac_image)
+            
+            logger.info(f"Converted image reference from '{src}' to Confluence format with filename '{filename}'")
+        
+        # Convert the soup back to HTML
+        html_content = str(soup)
+        
         return html_content
 
 
@@ -215,17 +291,14 @@ def convert_markdown_to_confluence(markdown_content, base_url=None):
     """
     Convert Markdown content to Confluence HTML.
 
-    This is a helper function that creates a MarkdownToConfluenceConverter instance
-    and uses it to convert the provided Markdown content.
-
     Args:
         markdown_content (str): The Markdown content to convert.
         base_url (str, optional): Base URL for converting relative links.
 
     Returns:
-        str: Converted HTML content in Confluence storage format.
+        str: Converted HTML content.
     """
-    converter = MarkdownToConfluenceConverter(base_url=base_url)
+    converter = MarkdownToConfluenceConverter(base_url)
     return converter.convert_to_html(markdown_content)
 
 
